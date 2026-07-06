@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -148,6 +149,7 @@ fun VoiceInputBar(
     onSend: () -> Unit,
     onRemoveAttachment: (Attachment) -> Unit,
     modifier: Modifier = Modifier,
+    micMuted: Boolean = false,
 ) {
     when (mode) {
         InputMode.VOICE -> VoiceModeBar(
@@ -157,6 +159,7 @@ fun VoiceInputBar(
             onMicClick = onMicClick,
             onCloseClick = onCloseClick,
             onRemoveAttachment = onRemoveAttachment,
+            micMuted = micMuted,
             modifier = modifier,
         )
 
@@ -180,6 +183,7 @@ private fun VoiceModeBar(
     onMicClick: () -> Unit,
     onCloseClick: () -> Unit,
     onRemoveAttachment: (Attachment) -> Unit,
+    micMuted: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -200,24 +204,27 @@ private fun VoiceModeBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CircleButton(
-                icon = Icons.Filled.Add,
-                contentDescription = "添加",
-                onClick = onPlusClick,
-                diameter = 40.dp,
-                iconSize = 22.dp,
-            )
-            // Tappable placeholder pill that activates the keyboard.
-            Box(
+            // Placeholder pill with the `+` tucked inside on the left.
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(48.dp)
                     .clip(CircleShape)
+                    .background(VoiceColors.Screen)
                     .border(1.dp, VoiceColors.CircleBorder, CircleShape)
                     .clickable(onClick = onActivateText)
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterStart,
+                    .padding(start = 6.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                CircleButton(
+                    icon = Icons.Filled.Add,
+                    contentDescription = "添加",
+                    onClick = onPlusClick,
+                    diameter = 36.dp,
+                    iconSize = 22.dp,
+                    borderColor = null,
+                )
                 Text(
                     text = "询问 ChatGPT",
                     color = VoiceColors.PlaceholderText,
@@ -225,17 +232,20 @@ private fun VoiceModeBar(
                 )
             }
             CircleButton(
-                icon = Icons.Outlined.Mic,
-                contentDescription = "语音输入",
+                icon = if (micMuted) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                contentDescription = if (micMuted) "取消静音" else "静音",
                 onClick = onMicClick,
-                diameter = 40.dp,
+                diameter = 48.dp,
                 iconSize = 22.dp,
+                background = if (micMuted) VoiceColors.MicMuted else VoiceColors.CircleBg,
+                borderColor = if (micMuted) null else VoiceColors.CircleBorder,
+                iconTint = if (micMuted) Color.White else VoiceColors.IconMuted,
             )
             CircleButton(
                 icon = Icons.Filled.Close,
                 contentDescription = "结束语音对话",
                 onClick = onCloseClick,
-                diameter = 40.dp,
+                diameter = 48.dp,
                 iconSize = 22.dp,
                 background = VoiceColors.Dark,
                 borderColor = null,

@@ -25,6 +25,8 @@ data class ChatMessage(
     val text: String,
     val fromUser: Boolean,
     val attachments: List<Attachment> = emptyList(),
+    /** When true, an assistant turn shows the copy / like / dislike / share row. */
+    val showActions: Boolean = false,
 )
 
 /** Composer mode: resting voice controls vs. an active text field with keyboard. */
@@ -36,6 +38,8 @@ enum class OrbState { IDLE, LISTENING, SPEAKING }
 /** Fixed palette matching the ChatGPT reference screenshots. */
 object VoiceColors {
     val Screen = Color(0xFFFFFFFF)
+    /** Page background — a light gray-white that sets off the white surfaces on top of it. */
+    val ScreenBg = Color(0xFFF4F4F5)
     val TitleStrong = Color(0xFF0D0D0D)
     val TitleMuted = Color(0xFF9A9AA0)
     val PlaceholderText = Color(0xFF8E8E93)
@@ -49,4 +53,6 @@ object VoiceColors {
     val FileIcon = Color(0xFF2F7BF6)
     val Skeleton = Color(0xFFE9E9EC)
     val SheetScrim = Color(0x66000000)
+    /** Muted-mic icon tint. */
+    val MicMuted = Color(0xFFE5484D)
 }

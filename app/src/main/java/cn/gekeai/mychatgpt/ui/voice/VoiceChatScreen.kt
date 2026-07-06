@@ -126,11 +126,11 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                 // Simulate the assistant thinking: show "正在思考" first, then reply.
                 val aiId = nextId()
                 messages.add(ChatMessage(aiId, "正在思考…", fromUser = false, transcribing = true))
-                delay(2000)
 
                 orbState = OrbState.SPEAKING
                 // Read the reply aloud while it streams in.
                 speech.speak(turn.ai)
+                delay(2000)
                 // Stream the reply one character at a time.
                 val builder = StringBuilder()
                 turn.ai.forEach { ch ->
@@ -361,7 +361,7 @@ private fun MessageItem(message: ChatMessage) {
                     Text(
                         text = "${att.badge} · ${att.name}",
                         color = VoiceColors.PlaceholderText,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
@@ -379,7 +379,8 @@ private fun MessageItem(message: ChatMessage) {
                     Text(
                         text = message.text,
                         color = VoiceColors.PlaceholderText,
-                        fontSize = 17.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 20.sp,
                         fontStyle = if (message.transcribing) FontStyle.Italic else FontStyle.Normal,
                     )
                 }
@@ -393,8 +394,8 @@ private fun MessageItem(message: ChatMessage) {
             Text(
                 text = message.text,
                 color = if (message.transcribing) VoiceColors.PlaceholderText else VoiceColors.PrimaryText,
-                fontSize = 17.sp,
-                lineHeight = 30.sp,
+                fontSize = 14.sp,
+                lineHeight = 24.sp,
                 fontStyle = if (message.transcribing) FontStyle.Italic else FontStyle.Normal,
                 modifier = Modifier.fillMaxWidth(),
             )

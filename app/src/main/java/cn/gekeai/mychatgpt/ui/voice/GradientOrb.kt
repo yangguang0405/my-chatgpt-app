@@ -55,9 +55,9 @@ fun GradientOrb(
     )
 
     // Continuously drifting phases (non-harmonic periods avoid an obvious loop).
-    val pMain by phase(if (active) 4200 else 8200, "pMain")
-    val pAlt by phase(if (active) 3100 else 6300, "pAlt")
-    val tide by phase(if (active) 5200 else 9700, "tide")
+    val pMain by phase(if (active) 2400 else 8200, "pMain")
+    val pAlt by phase(if (active) 1700 else 6300, "pAlt")
+    val tide by phase(if (active) 2900 else 9700, "tide")
     val drift by phase(if (active) 7000 else 13000, "drift")
 
     // While the assistant speaks there is no mic signal, so synthesize a lively
@@ -144,50 +144,61 @@ fun GradientOrb(
             center = Offset(creamX, creamY),
         )
 
-        // 3) Tide offset shared by the cloud layers so they rise/fall together. Loud
-        // moments add extra churn on top of the steady phase drift.
-        val churn = amp * 1.6f
-        val tideOff = h * 0.07f * swell * sin(tide + churn)
+        // 3) Tide offset shared by the cloud layers so they rise/fall together. When
+        // active the tide swings far harder and loud moments scramble the crests, so
+        // the blue heaves up and down through the whole orb like a churning sea.
+        val churn = amp * 2.2f
+        val tideMag = if (active) 0.17f else 0.07f
+        val tideOff = h * tideMag * swell * sin(tide + churn)
 
+        // Base heights and wave sizes surge when active: the layers ride much higher
+        // (so blue reaches the top of the orb) and the crests grow tall enough to
+        // overlap and roll over one another.
+        // When active the crests are broad, rounded ocean swells rather than sharp
+        // peaks: the secondary (high-freq) ripple is kept small and the base
+        // frequencies are lowered, and the whole edge is drawn with smooth beziers.
         // Back layer — lightest blue, large slow swells.
         cloudLayer(
-            baseY = h * (0.56f) - tideOff,
-            amp1 = h * 0.10f * swell, freq1 = 1.1f, phase1 = pMain + churn,
-            amp2 = h * 0.05f * swell, freq2 = 2.3f, phase2 = pAlt + churn * 1.4f,
+            baseY = h * (if (active) 0.32f else 0.56f) - tideOff,
+            amp1 = h * (if (active) 0.20f else 0.10f) * swell, freq1 = if (active) 0.9f else 1.1f, phase1 = pMain + churn,
+            amp2 = h * (if (active) 0.05f else 0.05f) * swell, freq2 = if (active) 1.7f else 2.3f, phase2 = pAlt + churn * 1.4f,
             colorStops = arrayOf(
                 0f to Color(0x008FCBF6),
                 0.35f to Color(0xB386C8F5),
                 1f to Color(0xFF6FBCF3),
             ),
+            smooth = active,
         )
 
         // Mid layer — vivid blue, the dominant billow.
         cloudLayer(
-            baseY = h * (0.70f) - tideOff * 0.6f,
-            amp1 = h * 0.09f * swell, freq1 = 1.4f, phase1 = pAlt + 1.6f + churn * 1.7f,
-            amp2 = h * 0.045f * swell, freq2 = 2.9f, phase2 = pMain + 0.8f + churn * 2.1f,
+            baseY = h * (if (active) 0.50f else 0.70f) - tideOff * 0.6f,
+            amp1 = h * (if (active) 0.17f else 0.09f) * swell, freq1 = if (active) 1.1f else 1.4f, phase1 = pAlt + 1.6f + churn * 1.7f,
+            amp2 = h * (if (active) 0.05f else 0.045f) * swell, freq2 = if (active) 2.0f else 2.9f, phase2 = pMain + 0.8f + churn * 2.1f,
             colorStops = arrayOf(
                 0f to Color(0x0034A0FF),
                 0.28f to Color(0xC22E9BFB),
                 1f to Color(0xFF1E8BFB),
             ),
+            smooth = active,
         )
 
         // Front layer — deepest, most saturated blue pooling at the bottom.
         cloudLayer(
-            baseY = h * (0.83f) + tideOff * 0.4f,
-            amp1 = h * 0.06f * swell, freq1 = 1.9f, phase1 = pMain * 1.3f + 2.1f + churn * 2.4f,
-            amp2 = h * 0.03f * swell, freq2 = 3.7f, phase2 = pAlt * 1.2f + churn * 2.8f,
+            baseY = h * (if (active) 0.66f else 0.83f) + tideOff * 0.4f,
+            amp1 = h * (if (active) 0.12f else 0.06f) * swell, freq1 = if (active) 1.4f else 1.9f, phase1 = pMain * 1.3f + 2.1f + churn * 2.4f,
+            amp2 = h * (if (active) 0.035f else 0.03f) * swell, freq2 = if (active) 2.6f else 3.7f, phase2 = pAlt * 1.2f + churn * 2.8f,
             colorStops = arrayOf(
                 0f to Color(0x000C77EE),
                 0.22f to Color(0xCC0F7BEF),
                 1f to Color(0xFF0A6BE6),
             ),
+            smooth = active,
         )
 
         // 4) A couple of white foam wisps riding the mid-layer crest. Louder speech
         // lifts their opacity so the crest flashes brighter on peaks.
-        val crestY = h * 0.66f - tideOff * 0.6f
+        val crestY = h * (if (active) 0.46f else 0.66f) - tideOff * 0.6f
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -229,19 +240,42 @@ private fun DrawScope.cloudLayer(
     freq2: Float,
     phase2: Float,
     colorStops: Array<Pair<Float, Color>>,
+    smooth: Boolean = false,
 ) {
     val w = size.width
     val h = size.height
     val steps = 36
+    fun crest(f: Float) = baseY +
+        amp1 * sin(freq1 * f * TWO_PI + phase1) +
+        amp2 * sin(freq2 * f * TWO_PI + phase2)
     val path = Path().apply {
         moveTo(0f, h)
-        for (i in 0..steps) {
-            val f = i / steps.toFloat()
-            val x = w * f
-            val y = baseY +
-                amp1 * sin(freq1 * f * TWO_PI + phase1) +
-                amp2 * sin(freq2 * f * TWO_PI + phase2)
-            if (i == 0) lineTo(0f, y) else lineTo(x, y)
+        if (smooth) {
+            // Round the sampled crest into a continuous curve: each segment ends at
+            // the midpoint between two samples, using the sample itself as the bezier
+            // control point. This turns the polyline into smooth ocean swells with no
+            // sharp peaks or V-notches.
+            var px = 0f
+            var py = crest(0f)
+            lineTo(px, py)
+            for (i in 1..steps) {
+                val f = i / steps.toFloat()
+                val x = w * f
+                val y = crest(f)
+                val mx = (px + x) / 2f
+                val my = (py + y) / 2f
+                quadraticBezierTo(px, py, mx, my)
+                px = x
+                py = y
+            }
+            lineTo(px, py)
+        } else {
+            for (i in 0..steps) {
+                val f = i / steps.toFloat()
+                val x = w * f
+                val y = crest(f)
+                if (i == 0) lineTo(0f, y) else lineTo(x, y)
+            }
         }
         lineTo(w, h)
         close()

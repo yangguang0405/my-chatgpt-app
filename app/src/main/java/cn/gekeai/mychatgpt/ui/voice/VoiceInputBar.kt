@@ -226,7 +226,7 @@ private fun VoiceModeBar(
                     borderColor = null,
                 )
                 Text(
-                    text = "询问 ChatGPT",
+                    text = "询问 GPT",
                     color = VoiceColors.PlaceholderText,
                     fontSize = 16.sp,
                 )
@@ -311,7 +311,7 @@ private fun TextModeBar(
             Box(modifier = Modifier.weight(1f)) {
                 if (text.isEmpty()) {
                     Text(
-                        text = "询问 ChatGPT",
+                        text = "询问 GPT",
                         color = VoiceColors.PlaceholderText,
                         fontSize = 17.sp,
                     )

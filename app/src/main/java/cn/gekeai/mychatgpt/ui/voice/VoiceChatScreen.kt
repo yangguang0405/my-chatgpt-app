@@ -268,7 +268,7 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                 GradientOrb(
                     state = orbState,
                     amplitude = audio.amplitude,
-                    size = 96.dp,
+                    size = 80.dp,
                 )
             }
             Spacer(Modifier.size(20.dp))

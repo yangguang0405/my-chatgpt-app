@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -108,18 +109,28 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
             messages.clear()
 
             if (turn.human.isNotEmpty()) {
-                messages.add(ChatMessage(nextId(), turn.human, fromUser = true))
+                // Simulate speech recognition: show "正在转录" first, then the text.
+                val humanId = nextId()
+                messages.add(ChatMessage(humanId, "正在转录…", fromUser = true, transcribing = true))
+                delay(2000)
+                val hi = messages.indexOfFirst { it.id == humanId }
+                if (hi >= 0) {
+                    messages[hi] = ChatMessage(humanId, turn.human, fromUser = true)
+                }
             }
 
             // Pause 1–2s before the assistant starts replying.
             delay(1500)
 
             if (turn.ai.isNotEmpty()) {
+                // Simulate the assistant thinking: show "正在思考" first, then reply.
+                val aiId = nextId()
+                messages.add(ChatMessage(aiId, "正在思考…", fromUser = false, transcribing = true))
+                delay(2000)
+
                 orbState = OrbState.SPEAKING
                 // Read the reply aloud while it streams in.
                 speech.speak(turn.ai)
-                val aiId = nextId()
-                messages.add(ChatMessage(aiId, "", fromUser = false))
                 // Stream the reply one character at a time.
                 val builder = StringBuilder()
                 turn.ai.forEach { ch ->
@@ -130,12 +141,13 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                     }
                     delay(35)
                 }
-                orbState = OrbState.IDLE
 
-                // Wait for the read-aloud to finish, then reveal the action row.
+                // Keep the orb in SPEAKING until the read-aloud actually finishes,
+                // then drop to IDLE and reveal the action row.
                 while (speech.isSpeaking) {
                     delay(100)
                 }
+                orbState = OrbState.IDLE
                 val index = messages.indexOfFirst { it.id == aiId }
                 if (index >= 0) {
                     messages[index] = messages[index].copy(showActions = true)
@@ -188,6 +200,18 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
             // Mute: stop capturing and show the red mic-off icon.
             micMuted = true
             audio.stop()
+        }
+    }
+
+    // Start capturing as soon as the screen opens so the orb reacts to the mic
+    // right away (requesting the permission the first time if it isn't granted).
+    LaunchedEffect(Unit) {
+        if (!micMuted && !audio.isRunning) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) startListening() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -356,6 +380,7 @@ private fun MessageItem(message: ChatMessage) {
                         text = message.text,
                         color = VoiceColors.PlaceholderText,
                         fontSize = 17.sp,
+                        fontStyle = if (message.transcribing) FontStyle.Italic else FontStyle.Normal,
                     )
                 }
             }
@@ -367,9 +392,10 @@ private fun MessageItem(message: ChatMessage) {
         ) {
             Text(
                 text = message.text,
-                color = VoiceColors.PrimaryText,
+                color = if (message.transcribing) VoiceColors.PlaceholderText else VoiceColors.PrimaryText,
                 fontSize = 17.sp,
                 lineHeight = 30.sp,
+                fontStyle = if (message.transcribing) FontStyle.Italic else FontStyle.Normal,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (message.showActions) {

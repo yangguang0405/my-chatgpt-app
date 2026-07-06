@@ -27,6 +27,8 @@ data class ChatMessage(
     val attachments: List<Attachment> = emptyList(),
     /** When true, an assistant turn shows the copy / like / dislike / share row. */
     val showActions: Boolean = false,
+    /** When true, a user turn shows a "正在转录" placeholder instead of [text]. */
+    val transcribing: Boolean = false,
 )
 
 /** Composer mode: resting voice controls vs. an active text field with keyboard. */

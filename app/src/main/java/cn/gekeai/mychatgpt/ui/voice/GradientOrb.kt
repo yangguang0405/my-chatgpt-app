@@ -43,6 +43,7 @@ fun GradientOrb(
     size: Dp = 96.dp,
 ) {
     val active = state != OrbState.IDLE
+    val speaking = state == OrbState.SPEAKING
     val transition = rememberInfiniteTransition(label = "orb")
 
     @Composable
@@ -59,6 +60,26 @@ fun GradientOrb(
     val tide by phase(if (active) 5200 else 9700, "tide")
     val drift by phase(if (active) 7000 else 13000, "drift")
 
+    // While the assistant speaks there is no mic signal, so synthesize a lively
+    // loudness envelope from two out-of-phase sines — a bumpy 0..1 curve that reads
+    // like speech cadence, driving the same scale/color reactions as a real voice.
+    val speakOsc by phase(720, "speakOsc")
+    val synthAmp = if (speaking) {
+        ((0.55f + 0.45f * sin(speakOsc)) * (0.6f + 0.4f * sin(speakOsc * 2.3f + 1f)))
+            .coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    // Effective loudness: real mic level while listening, synthetic while speaking.
+    // A short tween smooths the ~10Hz updates into fluid motion.
+    val rawAmp = maxOf(amplitude.coerceIn(0f, 1f), synthAmp)
+    val amp by animateFloatAsState(
+        targetValue = rawAmp,
+        animationSpec = tween(durationMillis = 90, easing = LinearEasing),
+        label = "amp",
+    )
+
     val pulse by transition.animateFloat(
         initialValue = 1f,
         targetValue = if (active) 1.06f else 1.015f,
@@ -69,17 +90,17 @@ fun GradientOrb(
         label = "pulse",
     )
 
-    // Diameter grows with live microphone loudness: up to +50% at full volume.
-    // A short tween smooths the ~10Hz amplitude updates into fluid motion.
+    // Diameter breathes only slightly with loudness (+~14% at full volume) so the
+    // orb pulses gently rather than ballooning.
     val voiceScale by animateFloatAsState(
-        targetValue = 1f + amplitude.coerceIn(0f, 1f) * 0.5f,
-        animationSpec = tween(durationMillis = 110, easing = LinearEasing),
+        targetValue = 1f + amp * 0.14f,
+        animationSpec = tween(durationMillis = 90, easing = LinearEasing),
         label = "voiceScale",
     )
 
     // How high the blue tide swells; larger and more energetic when active, and it
-    // surges further with the voice so the clouds visibly react to loud speech.
-    val swell = (if (active) 1.35f else 1.0f) + amplitude.coerceIn(0f, 1f) * 0.4f
+    // surges hard with the voice so the clouds churn vividly on loud speech.
+    val swell = (if (active) 1.35f else 1.0f) + amp * 0.95f
 
     Canvas(
         modifier = modifier
@@ -106,26 +127,33 @@ fun GradientOrb(
         )
 
         // 2) Warm cream glow drifting through the upper-middle (the "sun behind cloud").
+        // Loudness brightens and swells the glow so the orb visibly flares on peaks.
         val creamX = w * (0.5f + 0.14f * sin(drift))
         val creamY = h * (0.40f + 0.05f * sin(drift * 0.7f + 1f))
+        val creamRadius = w * (0.42f + 0.12f * amp)
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFFFF7DE).copy(alpha = 0.9f), Color.Transparent),
+                colors = listOf(
+                    Color(0xFFFFF7DE).copy(alpha = (0.9f + 0.1f * amp).coerceAtMost(1f)),
+                    Color.Transparent,
+                ),
                 center = Offset(creamX, creamY),
-                radius = w * 0.42f,
+                radius = creamRadius,
             ),
-            radius = w * 0.42f,
+            radius = creamRadius,
             center = Offset(creamX, creamY),
         )
 
-        // 3) Tide offset shared by the cloud layers so they rise/fall together.
-        val tideOff = h * 0.07f * swell * sin(tide)
+        // 3) Tide offset shared by the cloud layers so they rise/fall together. Loud
+        // moments add extra churn on top of the steady phase drift.
+        val churn = amp * 1.6f
+        val tideOff = h * 0.07f * swell * sin(tide + churn)
 
         // Back layer — lightest blue, large slow swells.
         cloudLayer(
             baseY = h * (0.56f) - tideOff,
-            amp1 = h * 0.10f * swell, freq1 = 1.1f, phase1 = pMain,
-            amp2 = h * 0.05f * swell, freq2 = 2.3f, phase2 = pAlt,
+            amp1 = h * 0.10f * swell, freq1 = 1.1f, phase1 = pMain + churn,
+            amp2 = h * 0.05f * swell, freq2 = 2.3f, phase2 = pAlt + churn * 1.4f,
             colorStops = arrayOf(
                 0f to Color(0x008FCBF6),
                 0.35f to Color(0xB386C8F5),
@@ -136,8 +164,8 @@ fun GradientOrb(
         // Mid layer — vivid blue, the dominant billow.
         cloudLayer(
             baseY = h * (0.70f) - tideOff * 0.6f,
-            amp1 = h * 0.09f * swell, freq1 = 1.4f, phase1 = pAlt + 1.6f,
-            amp2 = h * 0.045f * swell, freq2 = 2.9f, phase2 = pMain + 0.8f,
+            amp1 = h * 0.09f * swell, freq1 = 1.4f, phase1 = pAlt + 1.6f + churn * 1.7f,
+            amp2 = h * 0.045f * swell, freq2 = 2.9f, phase2 = pMain + 0.8f + churn * 2.1f,
             colorStops = arrayOf(
                 0f to Color(0x0034A0FF),
                 0.28f to Color(0xC22E9BFB),
@@ -148,8 +176,8 @@ fun GradientOrb(
         // Front layer — deepest, most saturated blue pooling at the bottom.
         cloudLayer(
             baseY = h * (0.83f) + tideOff * 0.4f,
-            amp1 = h * 0.06f * swell, freq1 = 1.9f, phase1 = pMain * 1.3f + 2.1f,
-            amp2 = h * 0.03f * swell, freq2 = 3.7f, phase2 = pAlt * 1.2f,
+            amp1 = h * 0.06f * swell, freq1 = 1.9f, phase1 = pMain * 1.3f + 2.1f + churn * 2.4f,
+            amp2 = h * 0.03f * swell, freq2 = 3.7f, phase2 = pAlt * 1.2f + churn * 2.8f,
             colorStops = arrayOf(
                 0f to Color(0x000C77EE),
                 0.22f to Color(0xCC0F7BEF),
@@ -157,24 +185,31 @@ fun GradientOrb(
             ),
         )
 
-        // 4) A couple of white foam wisps riding the mid-layer crest.
+        // 4) A couple of white foam wisps riding the mid-layer crest. Louder speech
+        // lifts their opacity so the crest flashes brighter on peaks.
         val crestY = h * 0.66f - tideOff * 0.6f
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color.White.copy(alpha = 0.85f), Color.Transparent),
+                colors = listOf(
+                    Color.White.copy(alpha = (0.85f + 0.15f * amp).coerceAtMost(1f)),
+                    Color.Transparent,
+                ),
                 center = Offset(w * (0.30f + 0.06f * sin(pAlt)), crestY + h * 0.02f * sin(pMain)),
-                radius = w * 0.16f,
+                radius = w * (0.16f + 0.05f * amp),
             ),
-            radius = w * 0.16f,
+            radius = w * (0.16f + 0.05f * amp),
             center = Offset(w * (0.30f + 0.06f * sin(pAlt)), crestY + h * 0.02f * sin(pMain)),
         )
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color.White.copy(alpha = 0.6f), Color.Transparent),
+                colors = listOf(
+                    Color.White.copy(alpha = (0.6f + 0.2f * amp).coerceAtMost(1f)),
+                    Color.Transparent,
+                ),
                 center = Offset(w * (0.68f - 0.05f * sin(pMain + 1f)), crestY - h * 0.01f),
-                radius = w * 0.13f,
+                radius = w * (0.13f + 0.04f * amp),
             ),
-            radius = w * 0.13f,
+            radius = w * (0.13f + 0.04f * amp),
             center = Offset(w * (0.68f - 0.05f * sin(pMain + 1f)), crestY - h * 0.01f),
         )
     }

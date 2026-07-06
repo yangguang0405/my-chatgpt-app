@@ -139,7 +139,7 @@ private object DoubaoTtsApi {
     private const val API_KEY = "4292d0c0-e9cb-4945-af1d-dabf98a46a2c"
 
     // 大模型男声音色。按需替换成控制台里选定的 speaker ID。
-    private const val SPEAKER = "zh_male_taocheng_uranus_bigtts"
+    private const val SPEAKER = "zh_male_m191_uranus_bigtts"
 
     private const val SAMPLE_RATE = 24_000
 

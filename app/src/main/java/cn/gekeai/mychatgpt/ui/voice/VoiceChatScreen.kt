@@ -101,7 +101,7 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
             val turn = ChatScriptApi.fetchNext()
             if (turn == null) {
                 // 404 / no message queued — wait a beat and poll again.
-                delay(3000)
+                delay(500)
                 continue
             }
 
@@ -112,7 +112,7 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                 // Simulate speech recognition: show "正在转录" first, then the text.
                 val humanId = nextId()
                 messages.add(ChatMessage(humanId, "正在转录…", fromUser = true, transcribing = true))
-                delay(2000)
+                delay(500)
                 val hi = messages.indexOfFirst { it.id == humanId }
                 if (hi >= 0) {
                     messages[hi] = ChatMessage(humanId, turn.human, fromUser = true)
@@ -120,7 +120,7 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
             }
 
             // Pause 1–2s before the assistant starts replying.
-            delay(1500)
+            delay(1000)
 
             if (turn.ai.isNotEmpty()) {
                 // Simulate the assistant thinking: show "正在思考" first, then reply.
@@ -130,7 +130,7 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                 orbState = OrbState.SPEAKING
                 // Read the reply aloud while it streams in.
                 speech.speak(turn.ai)
-                delay(2000)
+                delay(1000)
                 // Stream the reply one character at a time.
                 val builder = StringBuilder()
                 turn.ai.forEach { ch ->

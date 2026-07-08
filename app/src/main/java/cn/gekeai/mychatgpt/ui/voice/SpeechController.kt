@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Base64
+import java.security.MessageDigest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
@@ -20,18 +21,22 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.UUID
 
 /**
  * Reads assistant replies aloud with Volcengine Doubao TTS 2.0. Synthesis happens over
- * HTTP: text is sent to the cloud, the returned base64 audio is written to a cache file,
- * and played back with [MediaPlayer]. Because synthesis is asynchronous, [isSpeaking] is
+ * HTTP: text is sent to the cloud, the returned audio is cached on disk keyed by a hash
+ * of the text, and played back with [MediaPlayer]. Repeated replies of the same text
+ * play from the cache instead of re-synthesizing. Because synthesis is asynchronous, [isSpeaking] is
  * set eagerly the moment a [speak] call is accepted and stays true until playback ends,
  * so callers can await completion regardless of network latency.
  */
 class SpeechController(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Synthesized clips are cached here, keyed by a hash of the text, so repeated
+    // replies of the same text play from disk instead of hitting the network again.
+    private val cacheDir = File(appContext.cacheDir, "tts-cache").apply { mkdirs() }
 
     private var player: MediaPlayer? = null
     private var currentJob: Job? = null
@@ -51,22 +56,37 @@ class SpeechController(context: Context) {
         currentJob?.cancel()
         releasePlayer()
         currentJob = scope.launch {
-            val audio = DoubaoTtsApi.synthesize(text)
-            if (audio == null) {
+            val file = resolveAudioFile(text)
+            if (file == null) {
                 _isSpeaking.value = false
                 return@launch
             }
-            playAudio(audio)
+            playAudio(file)
         }
     }
 
-    private suspend fun playAudio(mp3: ByteArray) {
-        val file = withContext(Dispatchers.IO) {
-            File.createTempFile("doubao-tts", ".mp3", appContext.cacheDir).apply {
-                writeBytes(mp3)
-                deleteOnExit()
-            }
+    /**
+     * Returns the mp3 file for [text], using the cached clip when present and otherwise
+     * synthesizing it and writing it into the cache. Returns `null` if synthesis fails.
+     */
+    private suspend fun resolveAudioFile(text: String): File? = withContext(Dispatchers.IO) {
+        val cached = File(cacheDir, cacheKey(text) + ".mp3")
+        if (cached.exists() && cached.length() > 0) return@withContext cached
+
+        val audio = DoubaoTtsApi.synthesize(text) ?: return@withContext null
+        // Write to a temp file first, then rename, so a cancelled/failed write never
+        // leaves a truncated file that a later call would treat as a cache hit.
+        val tmp = File.createTempFile("doubao-tts", ".mp3", cacheDir)
+        try {
+            tmp.writeBytes(audio)
+            if (tmp.renameTo(cached)) cached else tmp
+        } catch (e: Exception) {
+            tmp.delete()
+            throw e
         }
+    }
+
+    private fun playAudio(file: File) {
         try {
             player = MediaPlayer().apply {
                 setAudioAttributes(
@@ -79,12 +99,10 @@ class SpeechController(context: Context) {
                 setOnCompletionListener {
                     _isSpeaking.value = false
                     releasePlayer()
-                    file.delete()
                 }
                 setOnErrorListener { _, _, _ ->
                     _isSpeaking.value = false
                     releasePlayer()
-                    file.delete()
                     true
                 }
                 // Local cache file, so a synchronous prepare returns quickly.
@@ -94,8 +112,13 @@ class SpeechController(context: Context) {
         } catch (_: Exception) {
             _isSpeaking.value = false
             releasePlayer()
-            file.delete()
         }
+    }
+
+    /** SHA-256 hex of the text, used as the cache file name. */
+    private fun cacheKey(text: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun releasePlayer() {
@@ -133,13 +156,14 @@ class SpeechController(context: Context) {
  */
 private object DoubaoTtsApi {
     private const val ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
-    private const val RESOURCE_ID = "seed-tts-2.0"
+    private const val RESOURCE_ID = "seed-tts-1.0"
 
     // TODO: 填入火山引擎控制台的 API Key。
     private const val API_KEY = "4292d0c0-e9cb-4945-af1d-dabf98a46a2c"
 
     // 大模型男声音色。按需替换成控制台里选定的 speaker ID。
-    private const val SPEAKER = "zh_male_m191_uranus_bigtts"
+    //private const val SPEAKER = "zh_male_m191_uranus_bigtts"
+    private const val SPEAKER = "zh_male_guangxiyuanzhou_moon_bigtts"
 
     private const val SAMPLE_RATE = 24_000
 
@@ -155,6 +179,7 @@ private object DoubaoTtsApi {
                     put("speaker", SPEAKER)
                     put("audio_params", JSONObject().apply {
                         put("format", "mp3")
+                        put("speech_rate", 60)
                         put("sample_rate", SAMPLE_RATE)
                     })
                 })

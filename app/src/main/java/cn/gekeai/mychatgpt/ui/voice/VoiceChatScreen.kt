@@ -127,10 +127,10 @@ fun VoiceChatScreen(modifier: Modifier = Modifier) {
                 val aiId = nextId()
                 messages.add(ChatMessage(aiId, "正在思考…", fromUser = false, transcribing = true))
 
+                delay(1000)
                 orbState = OrbState.SPEAKING
                 // Read the reply aloud while it streams in.
                 speech.speak(turn.ai)
-                delay(1000)
                 // Stream the reply one character at a time.
                 val builder = StringBuilder()
                 turn.ai.forEach { ch ->
